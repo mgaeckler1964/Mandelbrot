@@ -146,11 +146,8 @@ class MandelbrotWindow : public OverlappedWindow
 	double getGrayBase( int iteratios ) const;
 	BGRA findColor( int index, uint8 gray );
 	void recalcBitmap( bool force );
-	ProcessStatus handleCreate( void ) override;
-	SuccessCode handleClose() override;
+
 	ProcessStatus handleMouseMove( ModifierFlags modifier, const Point &position ) override;
-	ProcessStatus handleEditChange( int control ) override;
-	ProcessStatus handleButtonClick( int control ) override;
 	ProcessStatus handleLeftButton( LeftButton leftButton, ModifierFlags modifier, const Point &position ) override;
 	ProcessStatus handleRightButton( RightButton rightButton, ModifierFlags modifier, const Point &position ) override;
 	ProcessStatus handleResize( const Size &newSize ) override;
@@ -410,16 +407,6 @@ void MandelbrotWindow::recalcBitmap(bool force)
 // ----- class virtuals ------------------------------------------------ //
 // --------------------------------------------------------------------- //
 
-ProcessStatus MandelbrotWindow::handleCreate()
-{
-	return psDO_DEFAULT;
-}
-
-SuccessCode MandelbrotWindow::handleClose()
-{
-	return OverlappedWindow::handleClose();
-}
-
 ProcessStatus MandelbrotWindow::handleMouseMove( ModifierFlags modifier, const Point &position )
 {
 	if( modifier.test( ModifierFlags::mbLeftMouseButton ) )
@@ -501,17 +488,6 @@ ProcessStatus MandelbrotWindow::handleRightButton( RightButton rightButton, Modi
 
 	return psPROCESSED;
 }
-
-ProcessStatus MandelbrotWindow::handleEditChange( int control )
-{
-	return OverlappedWindow::handleEditChange( control );
-}
-
-ProcessStatus MandelbrotWindow::handleButtonClick( int buttonID )
-{
-	return OverlappedWindow::handleButtonClick( buttonID );
-}
-
 
 ProcessStatus MandelbrotWindow::handleResize( const Size &newSize )
 {
