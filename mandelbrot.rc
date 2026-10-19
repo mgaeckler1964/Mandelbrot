@@ -1,0 +1,34 @@
+#include <windows.h>
+
+#include "mandelbrot_rc.h"
+
+IDI_MANDELBROT		ICON	"mandelbrot.ico"
+
+1 VERSIONINFO
+FILEVERSION 1, 0, 0, 0
+PRODUCTVERSION 1, 0, 0, 0
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+	BLOCK "040704E4"              // Matches VarFileInfo Translation hex value.
+	BEGIN
+	  VALUE "CompanyName", "Martin Gäckler\000"
+	  VALUE "FileDescription", "Mandelbrot for Windows\000"
+	  VALUE "FileVersion", "1.0\000"
+	  VALUE "InternalName", "winapp\000"
+	  VALUE "LegalCopyright", "Copyright 8 2026. All Rights Reserved.\000"
+	  VALUE "LegalTrademarks", "Windows(TM) is a trademark of Microsoft Corporation\000"
+	  VALUE "OriginalFilename", "mandelbrot.exe\000"
+	  VALUE "ProductName", "Mandelbrot\000"
+	  VALUE "ProductVersion", "1.0\000"
+	END
+  END
+
+  BLOCK "VarFileInfo"
+  BEGIN
+//	VALUE "Translation", 0x0409, 0x04e4    // U.S. English(0x0409) & Windows Multilingual(0x04e4) 1252
+	VALUE "Translation", 0x0407, 0x04e4    // Deutsch(0x0407) & Windows Multilingual(0x04e4) 1252
+  END
+END
+
