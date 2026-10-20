@@ -41,6 +41,7 @@
 #include <gak/gaklib.h>
 #include <gak/math.h>
 #include <gak/stopWatch.h>
+#include <gak/threadPool.h>
 
 #include <WINLIB/WINAPP.H>
 #include <winlib/POPUP.H>
@@ -83,25 +84,13 @@ static const int ITERATION_STEP = 32;
 #define START_COLOR_MODE cmRoot	// since cmRoot is not yet defined we use 
 								//this preprocessor trick
 
-// --------------------------------------------------------------------- //
-// ----- macros -------------------------------------------------------- //
-// --------------------------------------------------------------------- //
-
-// --------------------------------------------------------------------- //
-// ----- type definitions ---------------------------------------------- //
-// --------------------------------------------------------------------- //
-
-typedef int (*MandelBrotFunc)( int *cache, double xc, double yc, int max_iterations );
-
-// --------------------------------------------------------------------- //
-// ----- class definitions --------------------------------------------- //
-// --------------------------------------------------------------------- //
+static int LINE_COUNT = 1;
 
 const unsigned RED = 0x01;
 const unsigned GREEN = 0x02;
 const unsigned BLUE = 0x04;
 
-static int s_colors[][3] = 
+static const int COLORS[][3] = 
 {
 	{ RED, GREEN, BLUE },
 	{ BLUE, RED, GREEN },
@@ -122,8 +111,45 @@ static int s_colors[][3] =
 	{ RED|GREEN|BLUE, RED|GREEN|BLUE, RED|GREEN|BLUE },
 };
 
+// --------------------------------------------------------------------- //
+// ----- macros -------------------------------------------------------- //
+// --------------------------------------------------------------------- //
+
+// --------------------------------------------------------------------- //
+// ----- type definitions ---------------------------------------------- //
+// --------------------------------------------------------------------- //
+
+class MandelbrotWindow;
+
+typedef int (*MandelBrotFunc)( int *cache, double xc, double yc, int max_iterations );
+
+struct ProcessorData
+{
+	MandelbrotWindow	*window;
+	Size				winSize;
+	MandelBrotFunc		mandelBrotFunc;
+	int					lowIter;
+	double				lowMidValue;
+	int					midIter;
+	double				midHighValue;
+
+	Scale				lowScale;
+	Scale				midScale;
+	Scale				highScale;
+
+	ProcessorData(MandelbrotWindow*win) : window(win)
+	{
+	}
+};
+
+// --------------------------------------------------------------------- //
+// ----- class definitions --------------------------------------------- //
+// --------------------------------------------------------------------- //
+
 class MandelbrotWindow : public OverlappedWindow
 {
+	friend gak::ProcessorType<int>;
+
 	Range			m_xRange,
 					m_yRange;
 	Scale			m_xScale,
@@ -149,6 +175,7 @@ class MandelbrotWindow : public OverlappedWindow
 	void updateScales();
 	double getGrayBase( int iteratios ) const;
 	BGRA findColor( int index, uint8 gray );
+	void recalcLine( int line, ProcessorData *pd );
 	void recalcBitmap( bool force, MandelBrotFunc mandelBrotFunc );
 
 	ProcessStatus handleMouseMove( ModifierFlags modifier, const Point &position ) override;
@@ -194,6 +221,22 @@ class WindowsApplication : public Application
 	public:
 	WindowsApplication() : Application( IDI_MANDELBROT ) {}
 };
+
+namespace gak
+{
+template <>
+class ProcessorType<int>
+{
+	public:
+	typedef int	object_type;
+
+	static void process( int objectToProcess, void *, void *mainData  )
+	{
+		ProcessorData	*pd = (ProcessorData*)mainData;
+		pd->window->recalcLine( objectToProcess, pd );
+	}
+};
+}
 
 // --------------------------------------------------------------------- //
 // ----- exported datas ------------------------------------------------ //
@@ -243,7 +286,7 @@ static int calculateMandelbrotPixel(int *cache, double xc, double yc, int max_it
 	return *cache = calculateMandelbrotPixel2(xc, yc, max_iterations);
 }
 
-static int getMandelbrotPixel(int *cache, double xc, double yc, int max_iterations)
+static int getMandelbrotPixel(int *cache, double, double, int)
 {
 	return *cache;
 }
@@ -311,27 +354,62 @@ double MandelbrotWindow::getGrayBase( int iter ) const
 
 BGRA MandelbrotWindow::findColor( int index, gak::uint8 gray )
 {
-	int chanIndex = s_colors[m_paletteIndex][index];
-	gak::uint8 red = (chanIndex & RED) ? gray : 0;
-	gak::uint8 green = (chanIndex & GREEN) ? gray : 0;
-	gak::uint8 blue = (chanIndex & BLUE) ? gray : 0;
+	int channelFlags = COLORS[m_paletteIndex][index];
+	gak::uint8 red = (channelFlags & RED) ? gray : 0;
+	gak::uint8 green = (channelFlags & GREEN) ? gray : 0;
+	gak::uint8 blue = (channelFlags & BLUE) ? gray : 0;
 
 	return BGRA( blue, green, red );
 }
 
+void MandelbrotWindow::recalcLine( int y, ProcessorData *pd )
+{
+	int *cache = m_iterations + y * pd->winSize.width;
+	const int maxY = gak::math::min( y+LINE_COUNT, pd->winSize.height );
+	for( ; y<maxY; ++y )
+	{
+		const double yc = m_yScale( y );
+		for( int x=0; x<pd->winSize.width; ++x )
+		{
+			const double xc = m_xScale( x );
+			const int iter = pd->mandelBrotFunc( cache++, xc, yc, m_maxIterations );
+			const double grayBase = getGrayBase( iter );
+			if (iter == m_maxIterations) 
+			{
+				m_mandelBrot.setPixel( x, y, m_doGray || m_blackHeart ? BGRA(0, 0, 0) : makeBGRA(winlib::colors::YELLOW) );
+			}
+			else 
+			{
+				if( m_doGray )
+				{
+					gak::uint8 gray = gak::math::round<gak::uint8>(grayBase);
+					m_mandelBrot.setPixel( x, y, BGRA(gray, gray, gray) );
+				}
+				else if( iter <= pd->lowIter )
+				{
+					const gak::uint8 gray = gak::math::round<gak::uint8>(pd->lowScale(grayBase));
+					m_mandelBrot.setPixel( x, y, findColor(0, gray) );
+				}
+				else if( iter <= pd->midIter )
+				{
+					const gak::uint8 gray = gak::math::round<gak::uint8>(pd->midScale(grayBase));
+					m_mandelBrot.setPixel( x, y, findColor(1, gray) );
+				}
+				else
+				{
+					const gak::uint8 gray = gak::math::round<gak::uint8>(pd->highScale(grayBase));
+					m_mandelBrot.setPixel( x, y, findColor(2, gray) );
+				}
+			}
+		}
+	}
+}
+
 void MandelbrotWindow::recalcBitmap(bool force, MandelBrotFunc mandelBrotFunc )
 {
-	static const double maxColorVal = 255;
+	static const double		maxColorVal = 255;
 
-	gak::StopWatch	sw( true );
-	const int lowIter = gak::math::round<int>(m_maxIterations/3.0);
-	const double lowMidValue = getGrayBase(lowIter);
-	const int midIter = gak::math::round<int>((m_maxIterations<<1)/3.0);
-	const double midHighValue = getGrayBase(midIter);
-
-	const Scale	lowScale( Range(0, lowMidValue), Range(0, maxColorVal) );
-	const Scale	midScale( Range(lowMidValue, midHighValue), Range(0, maxColorVal) );
-	const Scale	highScale( Range(midHighValue, maxColorVal), Range(0, maxColorVal) );
+	gak::StopWatch			sw( true );
 
 	const Size winSize = getClientSize();
 	const Size &bitmapSize = m_mandelBrot.getSize();
@@ -343,44 +421,28 @@ void MandelbrotWindow::recalcBitmap(bool force, MandelBrotFunc mandelBrotFunc )
 	}
 	if( force )
 	{
-		int *cache = m_iterations.get();
-		for( int y =0; y<winSize.height; ++y	)
+		ProcessorData			data(this);
+
+		gak::ThreadPool<int>	thePool( gak::Thread::getNumberOfCores(), "Mandelbrot", &data );
+
+		data.mandelBrotFunc = mandelBrotFunc;
+		data.lowIter = gak::math::round<int>(m_maxIterations/3.0);
+		data.lowMidValue = getGrayBase(data.lowIter);
+		data.midIter = gak::math::round<int>((m_maxIterations<<1)/3.0);
+		data.midHighValue = getGrayBase(data.midIter);
+		data.lowScale = Scale( Range(0, data.lowMidValue), Range(0, maxColorVal) );
+		data.midScale = Scale( Range(data.lowMidValue, data.midHighValue), Range(0, maxColorVal) );
+		data.highScale = Scale( Range(data.midHighValue, maxColorVal), Range(0, maxColorVal) );
+		data.winSize = winSize;
+
+		thePool.start();
+		for( int y =0; y<winSize.height; y+=LINE_COUNT	)
 		{
-			const double yc = m_yScale( y );
-			for( int x=0; x<winSize.width; ++x )
-			{
-				const double xc = m_xScale( x );
-				const int iter = mandelBrotFunc( cache++, xc, yc, m_maxIterations );
-				const double grayBase = getGrayBase( iter );
-				if (iter == m_maxIterations) 
-				{
-					m_mandelBrot.setPixel( x, y, m_doGray || m_blackHeart ? BGRA(0, 0, 0) : makeBGRA(winlib::colors::YELLOW) );
-				}
-				else 
-				{
-					if( m_doGray )
-					{
-						gak::uint8 gray = gak::math::round<gak::uint8>(grayBase);
-						m_mandelBrot.setPixel( x, y, BGRA(gray, gray, gray) );
-					}
-					else if( iter <= lowIter )
-					{
-						const gak::uint8 gray = gak::math::round<gak::uint8>(lowScale(grayBase));
-						m_mandelBrot.setPixel( x, y, findColor(0, gray) );
-					}
-					else if( iter <= midIter )
-					{
-						const gak::uint8 gray = gak::math::round<gak::uint8>(midScale(grayBase));
-						m_mandelBrot.setPixel( x, y, findColor(1, gray) );
-					}
-					else
-					{
-						const gak::uint8 gray = gak::math::round<gak::uint8>(highScale(grayBase));
-						m_mandelBrot.setPixel( x, y, findColor(2, gray) );
-					}
-				}
-			}
+			thePool.process( y );
+
 		}
+		thePool.flush();
+		thePool.shutdown();
 		sw.stop();
 
 		if( m_showLabels )
@@ -401,16 +463,16 @@ void MandelbrotWindow::recalcBitmap(bool force, MandelBrotFunc mandelBrotFunc )
 
 			memDC.getFont().setCourier().setDirection( 900 ).create();
 			memDC.setTextAlignment( Device::haCenter, Device::vaTop );
-			memDC.textOut( 0, winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val1,0,6 ).c_str() );
+			memDC.textOut( 0, data.winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val1,0,6 ).c_str() );
 
 			memDC.getFont().setDirection( 2700 );
-			memDC.textOut( winSize.width, winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val2,0,6 ).c_str() );
+			memDC.textOut( data.winSize.width, data.winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val2,0,6 ).c_str() );
 
 			memDC.getFont().setDirection( 0 );
-			memDC.textOut( winSize.width/2, 0, gak::NumberBuffer().addFloat( m_yRange.val2,0,6 ).c_str() );
+			memDC.textOut( data.winSize.width/2, 0, gak::NumberBuffer().addFloat( m_yRange.val2,0,6 ).c_str() );
 
 			memDC.setTextAlignment( Device::haCenter, Device::vaBottom );
-			memDC.textOut( winSize.width/2, winSize.height, gak::NumberBuffer().addFloat( m_yRange.val1,0,6 ).c_str() );
+			memDC.textOut( data.winSize.width/2, data.winSize.height, gak::NumberBuffer().addFloat( m_yRange.val1,0,6 ).c_str() );
 		}
 	}
 }
@@ -541,7 +603,7 @@ ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 	else if( c == 'l' )
 		m_showLabels = !m_showLabels;
 	else if( c == 'p' )
-		m_paletteIndex = (m_paletteIndex+1)%arraySize(s_colors);
+		m_paletteIndex = (m_paletteIndex+1)%arraySize(COLORS);
 	else if( c == 'q' )
 		close();
 	else if( c == 'r' )
