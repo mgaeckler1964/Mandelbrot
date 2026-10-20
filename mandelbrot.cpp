@@ -42,11 +42,13 @@
 #include <gak/math.h>
 #include <gak/stopWatch.h>
 #include <gak/threadPool.h>
+#include <gak/xmlParser.h>
 
 #include <WINLIB/WINAPP.H>
 #include <winlib/POPUP.H>
 #include <winlib/DEVICE.H>
 #include <WINLIB/colors.h>
+#include <WINLIB/StandardDialogs.h>
 
 #include "mandelbrot_rc.h"
 
@@ -186,6 +188,8 @@ class MandelbrotWindow : public OverlappedWindow
 	ProcessStatus handleRepaint( Device &hDC ) override;
 	ProcessStatus handleCharacterInput( int c ) override;
 	ProcessStatus handleKeyUp( int key ) override;
+	ProcessStatus handleCommand( int cmd ) override;
+
 	void handleTimer() override;
 
 	public:
@@ -205,6 +209,16 @@ class WindowsApplication : public Application
 	CallbackWindow *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ ) override
 	{
 		std::unique_ptr<MandelbrotWindow>	mainWindow( new MandelbrotWindow );
+
+		static ACCEL accelerators[] =
+		{
+			{ FVIRTKEY|FCONTROL,	'N', FILE_NEW_id },
+			{ FVIRTKEY|FCONTROL,	'O', FILE_OPEN_id },
+			{ FVIRTKEY|FCONTROL,	'S', FILE_SAVE_id },
+			{ FVIRTKEY|FALT,		'X', FILE_EXIT_id },
+		};
+		mainWindow->setAccelerators( accelerators );
+
 		if( mainWindow->create( nullptr ) == scERROR )
 		{
 			throw gak::LibraryException( "Could not create window!" );
@@ -692,6 +706,93 @@ ProcessStatus MandelbrotWindow::handleKeyUp( int key )
 		return OverlappedWindow::handleKeyUp( key );
 	}
 	updateRanges( newXrange, newYrange );
+	return psPROCESSED;
+}
+
+ProcessStatus MandelbrotWindow::handleCommand( int cmd )
+{
+	switch( cmd )
+	{
+	case FILE_NEW_id:
+		m_xRange = X_RANGE;
+		m_yRange = Y_RANGE;
+		m_paletteIndex = START_PALETTE;
+		m_maxIterations = START_ITERATIONS;
+		m_colorMode = START_COLOR_MODE;
+		m_doGray = m_blackHeart = false,
+		updateScales();
+		recalcBitmap(true, calculateMandelbrotPixel);
+		invalidateWindow();
+		break;
+			
+	case FILE_OPEN_id:
+	{
+		OpenFileDialog	dialog;
+		if( dialog.create( this ) )
+		{
+			const char			*fileName = dialog.getFilename();
+			gak::xml::Parser	theGuiParser( fileName );
+			std::unique_ptr<gak::xml::Document>	newDoc( theGuiParser.readFile( false ) );
+			if(newDoc)
+			{
+				gak::xml::Element *root = newDoc->getRoot();
+				if( root )
+				{
+					gak::xml::Element *area = root->findElement("area");
+					if( area )
+					{
+						double xMin = area->getAttribute("xMin").getValueE<double>();
+						double xMax = area->getAttribute("xMax").getValueE<double>();
+						double yMin = area->getAttribute("yMin").getValueE<double>();
+						double yMax = area->getAttribute("yMax").getValueE<double>();
+
+						m_maxIterations = area->getAttribute("maxInterations").getValueE<int>();
+						m_paletteIndex = area->getAttribute("paletteIndex" ).getValueE<int>();
+						m_colorMode = ColorMode(area->getAttribute("colorMode" ).getValueE<int>());
+
+						m_doGray = area->getAttribute("doGray").getValueE<bool>();
+						m_blackHeart = area->getAttribute("blackHeart").getValueE<bool>();
+
+						updateRanges(Range(xMin,xMax), Range(yMin,yMax));
+					}
+				}
+			}
+		}
+		break;
+	}
+	case FILE_SAVE_id:
+	{
+		SaveFileAsDialog	dialog;
+		if( dialog.create( this ) )
+		{
+			const char *fileName = dialog.getFilename();
+			std::unique_ptr<gak::xml::Document>	doc( new gak::xml::Document(fileName) );
+			doc->addObject( new gak::xml::Declaration );
+			gak::xml::Element *root = doc->addObject( new gak::xml::Any( "mandelbrot" ) );
+			gak::xml::Element *area = root->addObject( new gak::xml::Any( "area" ) );
+
+			area->setFloatAttribute("xMin", m_xRange.val1, -1);
+			area->setFloatAttribute("xMax", m_xRange.val2, -1);
+			area->setFloatAttribute("yMin", m_yRange.val1, -1);
+			area->setFloatAttribute("yMax", m_yRange.val2, -1);
+			area->setIntegerAttribute("maxInterations", m_maxIterations);
+			area->setIntegerAttribute("paletteIndex", m_paletteIndex);
+			area->setIntegerAttribute("colorMode", m_colorMode);
+			area->setBoolAttribute("doGray", m_doGray);
+			area->setBoolAttribute("blackHeart", m_blackHeart);
+
+			STRING	xmlCode = doc->generate( gak::xml::XML_MODE );
+			std::ofstream	stream( fileName );
+			stream << xmlCode;
+		}
+		break;
+	}
+	case FILE_EXIT_id:
+		close();
+		break;
+	default:
+		return OverlappedWindow::handleCommand( cmd );
+	}
 	return psPROCESSED;
 }
 
