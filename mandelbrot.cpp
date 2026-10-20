@@ -91,6 +91,8 @@ static const int ITERATION_STEP = 32;
 // ----- type definitions ---------------------------------------------- //
 // --------------------------------------------------------------------- //
 
+typedef int (*MandelBrotFunc)( int *cache, double xc, double yc, int max_iterations );
+
 // --------------------------------------------------------------------- //
 // ----- class definitions --------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -105,13 +107,13 @@ static int s_colors[][3] =
 	{ BLUE, RED, GREEN },
 	{ GREEN, BLUE, RED },
 
-	{ RED, BLUE, GREEN},
-	{ BLUE, GREEN, RED },
-	{ GREEN, RED, BLUE  },
-
 	{ BLUE|GREEN, GREEN|RED, RED|BLUE },
 	{ GREEN|RED, RED|BLUE, BLUE|GREEN },
 	{ RED|BLUE, BLUE|GREEN, GREEN|RED },
+
+	{ RED, BLUE, GREEN},
+	{ BLUE, GREEN, RED },
+	{ GREEN, RED, BLUE  },
 
 	{ BLUE|GREEN, RED|BLUE, GREEN|RED },
 	{ GREEN|RED, BLUE|GREEN, RED|BLUE },
@@ -126,6 +128,8 @@ class MandelbrotWindow : public OverlappedWindow
 					m_yRange;
 	Scale			m_xScale,
 					m_yScale;
+
+	gak::Buffer<int>	m_iterations;
 
 	DirectBitmap	m_mandelBrot;
 
@@ -145,7 +149,7 @@ class MandelbrotWindow : public OverlappedWindow
 	void updateScales();
 	double getGrayBase( int iteratios ) const;
 	BGRA findColor( int index, uint8 gray );
-	void recalcBitmap( bool force );
+	void recalcBitmap( bool force, MandelBrotFunc mandelBrotFunc );
 
 	ProcessStatus handleMouseMove( ModifierFlags modifier, const Point &position ) override;
 	ProcessStatus handleLeftButton( LeftButton leftButton, ModifierFlags modifier, const Point &position ) override;
@@ -213,7 +217,7 @@ static WindowsApplication	app;
 // ----- module functions ---------------------------------------------- //
 // --------------------------------------------------------------------- //
 
-static int calculateMandelbrotPixel(double xc, double yc, int max_iterations)
+static int calculateMandelbrotPixel2(double xc, double yc, int max_iterations)
 {
 	double x = 0.0;
 	double y = 0.0;
@@ -232,6 +236,16 @@ static int calculateMandelbrotPixel(double xc, double yc, int max_iterations)
 	}
     
 	return iter; // Rückgabe der Iterationszahl zur Farbwertberechnung
+}
+
+static int calculateMandelbrotPixel(int *cache, double xc, double yc, int max_iterations)
+{
+	return *cache = calculateMandelbrotPixel2(xc, yc, max_iterations);
+}
+
+static int getMandelbrotPixel(int *cache, double xc, double yc, int max_iterations)
+{
+	return *cache;
 }
 
 // --------------------------------------------------------------------- //
@@ -273,7 +287,7 @@ void MandelbrotWindow::updateRanges( const Range &xRange, const Range &yRange )
 		m_xRange = xRange;
 		m_yRange = yRange;
 		updateScales();
-		recalcBitmap(true);
+		recalcBitmap(true, calculateMandelbrotPixel);
 		invalidateWindow();
 	}
 }
@@ -305,7 +319,7 @@ BGRA MandelbrotWindow::findColor( int index, gak::uint8 gray )
 	return BGRA( blue, green, red );
 }
 
-void MandelbrotWindow::recalcBitmap(bool force)
+void MandelbrotWindow::recalcBitmap(bool force, MandelBrotFunc mandelBrotFunc )
 {
 	static const double maxColorVal = 255;
 
@@ -323,18 +337,20 @@ void MandelbrotWindow::recalcBitmap(bool force)
 	const Size &bitmapSize = m_mandelBrot.getSize();
 	if( bitmapSize != winSize )
 	{
+		m_iterations.resize(winSize.width*winSize.height, true );
 		m_mandelBrot.createBitmap( winSize );
 		force = true;
 	}
 	if( force )
 	{
-		for( int x =0; x<winSize.width; ++x	)
+		int *cache = m_iterations.get();
+		for( int y =0; y<winSize.height; ++y	)
 		{
-			const double xc = m_xScale( x );
-			for( int y=0; y<winSize.height; ++y )
+			const double yc = m_yScale( y );
+			for( int x=0; x<winSize.width; ++x )
 			{
-				const double yc = m_yScale( y );
-				const int iter = calculateMandelbrotPixel( xc, yc, m_maxIterations );
+				const double xc = m_xScale( x );
+				const int iter = mandelBrotFunc( cache++, xc, yc, m_maxIterations );
 				const double grayBase = getGrayBase( iter );
 				if (iter == m_maxIterations) 
 				{
@@ -514,6 +530,8 @@ ProcessStatus MandelbrotWindow::handleRepaint( Device &hDC )
 
 ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 {
+	MandelBrotFunc	func = getMandelbrotPixel;
+
 	if( c == 'b' )
 		m_blackHeart = !m_blackHeart;
 	else if( c == 'e' )
@@ -528,12 +546,14 @@ ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 		close();
 	else if( c == 'r' )
 	{
+		func = calculateMandelbrotPixel;
 		m_xRange = X_RANGE;
 		m_yRange = Y_RANGE;
 		updateScales();
 	}
 	else if( c == 'R' )
 	{
+		func = calculateMandelbrotPixel;
 		m_xRange = X_RANGE;
 		m_yRange = Y_RANGE;
 		m_paletteIndex = START_PALETTE;
@@ -547,7 +567,7 @@ ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 		return psPROCESSED;
 	}
 
-	recalcBitmap(true);
+	recalcBitmap(true, func);
 	invalidateWindow();
 	return psPROCESSED;
 }
@@ -589,14 +609,14 @@ ProcessStatus MandelbrotWindow::handleKeyUp( int key )
 			newXrange.val2 += xOffset;
 	}
 	else if( key == VK_ADD || key == VK_OEM_PLUS )
-	{
+	{	// allthough the ranges did not change, we need a rebuild and not the cache
 		if( isControlKey() )
 			m_maxIterations <<= 1;
 		else
 			m_maxIterations += isShiftKey() ? 1 : ITERATION_STEP;
 	}
 	else if( key == VK_SUBTRACT || key == VK_OEM_MINUS  )
-	{
+	{	// allthough the ranges did not change, we need a rebuild and not the cache
 		if( isControlKey() )
 			m_maxIterations >>= 1;
 		else
@@ -615,7 +635,7 @@ ProcessStatus MandelbrotWindow::handleKeyUp( int key )
 
 void MandelbrotWindow::handleTimer()
 {
-	recalcBitmap(false);
+	recalcBitmap(false, calculateMandelbrotPixel);
 	invalidateWindow();
 	removeTimer();
 }
