@@ -113,6 +113,25 @@ static const int COLORS[][3] =
 	{ RED|GREEN|BLUE, RED|GREEN|BLUE, RED|GREEN|BLUE },
 };
 
+static const BGRA CENTER_COLORS[] =
+{
+	makeBGRA(colors::YELLOW),
+	makeBGRA(colors::BLACK),
+	makeBGRA(colors::GRAY),
+	makeBGRA(colors::WHITE),
+	makeBGRA(colors::BLUE),
+	makeBGRA(colors::RED),
+	makeBGRA(colors::LIME),
+	makeBGRA(colors::MAGENTA),
+	makeBGRA(colors::CYAN),
+	makeBGRA(colors::MAROON),
+	makeBGRA(colors::GREEN),
+	makeBGRA(colors::NAVY),
+	makeBGRA(colors::OLIVE),
+	makeBGRA(colors::PURPE),
+	makeBGRA(colors::TEAL),
+};
+
 // --------------------------------------------------------------------- //
 // ----- macros -------------------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -167,7 +186,7 @@ class MandelbrotWindow : public OverlappedWindow
 	int				m_maxIterations;
 	bool			m_showLabels;
 	bool			m_doGray;
-	bool			m_blackHeart;
+	int				m_centerColor;
 	enum ColorMode 
 	{
 		cmLinear, cmRoot, cmLog, cmUnused
@@ -202,7 +221,7 @@ class WindowsApplication : public Application
 	{
 		doEnableLogEx(gakLogging::llInfo);
 		doDisableLog();
-		setApplication("MoonLander");
+		setApplication("Mandelbrot");
 		setCompany("gak");
 		return 0;
 	}
@@ -316,7 +335,7 @@ static int getMandelbrotPixel(int *cache, double, double, int)
 MandelbrotWindow::MandelbrotWindow() : OverlappedWindow( nullptr ), 
 	m_xRange(X_RANGE), m_yRange(Y_RANGE), 
 	m_xScale(Range(0,1),Range(0,1)), m_yScale(Range(0,1),Range(0,1)), 
-	m_maxIterations(START_ITERATIONS), m_showLabels(true), m_colorMode(START_COLOR_MODE), m_doGray(false), m_blackHeart(false),
+	m_maxIterations(START_ITERATIONS), m_showLabels(true), m_colorMode(START_COLOR_MODE), m_doGray(false), m_centerColor(0),
 	m_paletteIndex(START_PALETTE)
 {
 	setText("Apfelmänchen mit Mandelbrot");
@@ -339,10 +358,13 @@ void MandelbrotWindow::updateScales()
 
 void MandelbrotWindow::updateRanges( const Range &xRange, const Range &yRange )
 {
-	if( xRange.val1 < xRange.val2 && yRange.val1 < yRange.val2)
+	if( xRange.val1 < xRange.val2 && yRange.val1 < yRange.val2 )
 	{
-		m_xRange = xRange;
-		m_yRange = yRange;
+		m_xRange.val1 = gak::math::max(X_RANGE.val1, xRange.val1); 
+		m_xRange.val2 = gak::math::min(X_RANGE.val2, xRange.val2); 
+		m_yRange.val1 = gak::math::max(Y_RANGE.val1, yRange.val1); 
+		m_yRange.val2 = gak::math::min(Y_RANGE.val2, yRange.val2); 
+
 		updateScales();
 		recalcBitmap(true, calculateMandelbrotPixel);
 		invalidateWindow();
@@ -390,7 +412,7 @@ void MandelbrotWindow::recalcLine( int y, ProcessorData *pd )
 			const double grayBase = getGrayBase( iter );
 			if (iter == m_maxIterations) 
 			{
-				m_mandelBrot.setPixel( x, y, m_doGray || m_blackHeart ? BGRA(0, 0, 0) : makeBGRA(winlib::colors::YELLOW) );
+				m_mandelBrot.setPixel( x, y, m_doGray ? BGRA(0, 0, 0) : CENTER_COLORS[m_centerColor] );
 			}
 			else 
 			{
@@ -473,6 +495,9 @@ void MandelbrotWindow::recalcBitmap(bool force, MandelBrotFunc mandelBrotFunc )
 				m_doGray 
 					? "Graustufen"
 					: gak::NumberBuffer().addNumber( m_paletteIndex ).c_str() 
+			); 
+			memDC.textOut( 5, 65, 
+				gak::NumberBuffer().addNumber( m_centerColor ).c_str() 
 			); 
 
 			memDC.getFont().setCourier().setDirection( 900 ).create();
@@ -567,14 +592,8 @@ ProcessStatus MandelbrotWindow::handleRightButton( RightButton rightButton, Modi
 		const double yIncrement = yHeight/2;
 
 		updateRanges(
-			Range(
-				gak::math::max(m_xRange.val1-xIncrement, X_RANGE.val1), 
-				gak::math::min(m_xRange.val2+xIncrement, X_RANGE.val2)
-			),
-			Range(
-				gak::math::max(m_yRange.val1-yIncrement, Y_RANGE.val1), 
-				gak::math::min(m_yRange.val2+yIncrement, Y_RANGE.val2)
-			)
+			Range(m_xRange.val1-xIncrement, m_xRange.val2+xIncrement),
+			Range(m_yRange.val1-yIncrement,	m_yRange.val2+yIncrement)
 		);
 	}
 
@@ -609,7 +628,9 @@ ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 	MandelBrotFunc	func = getMandelbrotPixel;
 
 	if( c == 'b' )
-		m_blackHeart = !m_blackHeart;
+		m_centerColor = nextIndex(CENTER_COLORS, m_centerColor);
+	else if( c == 'B' )
+		m_centerColor = prevIndex(CENTER_COLORS, m_centerColor);
 	else if( c == 'e' )
 		m_colorMode = ColorMode((int(m_colorMode)+1)%cmUnused);
 	else if( c == 'g' )
@@ -617,7 +638,9 @@ ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 	else if( c == 'l' )
 		m_showLabels = !m_showLabels;
 	else if( c == 'p' )
-		m_paletteIndex = (m_paletteIndex+1)%arraySize(COLORS);
+		m_paletteIndex = nextIndex(COLORS, m_paletteIndex);
+	else if( c == 'P' )
+		m_paletteIndex = prevIndex(COLORS, m_paletteIndex);
 	else if( c == 'q' )
 		close();
 	else if( c == 'r' )
@@ -635,7 +658,8 @@ ProcessStatus MandelbrotWindow::handleCharacterInput( int c )
 		m_paletteIndex = START_PALETTE;
 		m_maxIterations = START_ITERATIONS;
 		m_colorMode = START_COLOR_MODE;
-		m_doGray = m_blackHeart = false,
+		m_centerColor = 0;
+		m_doGray = false,
 		updateScales();
 	}
 	else
@@ -719,7 +743,8 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 		m_paletteIndex = START_PALETTE;
 		m_maxIterations = START_ITERATIONS;
 		m_colorMode = START_COLOR_MODE;
-		m_doGray = m_blackHeart = false,
+		m_centerColor = 0;
+		m_doGray = false,
 		updateScales();
 		recalcBitmap(true, calculateMandelbrotPixel);
 		invalidateWindow();
@@ -728,7 +753,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 	case FILE_OPEN_id:
 	{
 		OpenFileDialog	dialog;
-		if( dialog.create( this ) )
+		if( dialog.create( this, FILE_OPEN_TITLE, APFEL_FILES ) )
 		{
 			const char			*fileName = dialog.getFilename();
 			gak::xml::Parser	theGuiParser( fileName );
@@ -751,7 +776,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 						m_colorMode = ColorMode(area->getAttribute("colorMode" ).getValueE<int>());
 
 						m_doGray = area->getAttribute("doGray").getValueE<bool>();
-						m_blackHeart = area->getAttribute("blackHeart").getValueE<bool>();
+						m_centerColor = area->getAttribute("centerColor").getValueE<int>();
 
 						updateRanges(Range(xMin,xMax), Range(yMin,yMax));
 					}
@@ -763,7 +788,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 	case FILE_SAVE_id:
 	{
 		SaveFileAsDialog	dialog;
-		if( dialog.create( this ) )
+		if( dialog.create( this, FILE_SAVE_TITLE, APFEL_FILES ) )
 		{
 			const char *fileName = dialog.getFilename();
 			std::unique_ptr<gak::xml::Document>	doc( new gak::xml::Document(fileName) );
@@ -779,7 +804,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 			area->setIntegerAttribute("paletteIndex", m_paletteIndex);
 			area->setIntegerAttribute("colorMode", m_colorMode);
 			area->setBoolAttribute("doGray", m_doGray);
-			area->setBoolAttribute("blackHeart", m_blackHeart);
+			area->setBoolAttribute("centerColor", m_centerColor);
 
 			STRING	xmlCode = doc->generate( gak::xml::XML_MODE );
 			std::ofstream	stream( fileName );
