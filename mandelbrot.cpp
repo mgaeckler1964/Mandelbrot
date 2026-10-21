@@ -49,6 +49,7 @@
 #include <winlib/DEVICE.H>
 #include <WINLIB/colors.h>
 #include <WINLIB/StandardDialogs.h>
+#include <WINLIB/FileTypeRegistry.h>
 
 #include "mandelbrot_rc.h"
 
@@ -213,6 +214,9 @@ class MandelbrotWindow : public OverlappedWindow
 
 	public:
 	MandelbrotWindow();
+	void loadFile( STRING fileName );
+	virtual ~MandelbrotWindow();
+
 };
 
 class WindowsApplication : public Application
@@ -223,9 +227,18 @@ class WindowsApplication : public Application
 		doDisableLog();
 		setApplication("Mandelbrot");
 		setCompany("gak");
+		winlib::FileTypeRegistry	ftReg;
+		ftReg.extension = ".apfel";
+		ftReg.type = "apfel_file";
+		ftReg.type_description = "Apfelmännchen-/Mandelbrotdefinition";
+		ftReg.cmd = "open";
+		ftReg.cmd_description =	"&open";
+		ftReg.commandLine =	STRING(getFileName()).add(" \"%1\"");
+
+		addFileType(&ftReg);
 		return 0;
 	}
-	CallbackWindow *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ ) override
+	CallbackWindow *createMainWindow( const char *cmdLine, int /*nCmdShow*/ ) override
 	{
 		std::unique_ptr<MandelbrotWindow>	mainWindow( new MandelbrotWindow );
 
@@ -242,7 +255,8 @@ class WindowsApplication : public Application
 		{
 			throw gak::LibraryException( "Could not create window!" );
 		}
-
+		if( cmdLine && *cmdLine )
+			mainWindow->loadFile( cmdLine );
 		mainWindow->focus();
 		return mainWindow.release();
 	}
@@ -339,6 +353,10 @@ MandelbrotWindow::MandelbrotWindow() : OverlappedWindow( nullptr ),
 	m_paletteIndex(START_PALETTE)
 {
 	setText("Apfelmänchen mit Mandelbrot");
+}
+
+MandelbrotWindow::~MandelbrotWindow()
+{
 }
 
 // --------------------------------------------------------------------- //
@@ -588,8 +606,8 @@ ProcessStatus MandelbrotWindow::handleRightButton( RightButton rightButton, Modi
 		const double xWidth = m_xRange.val2 - m_xRange.val1;
 		const double yHeight = m_yRange.val2 - m_yRange.val1;
 
-		const double xIncrement = xWidth/2;
-		const double yIncrement = yHeight/2;
+		const double xIncrement = (xWidth/2) ? (xWidth/2) : xWidth;
+		const double yIncrement = (yHeight/2) ? (yHeight/2) : yHeight;
 
 		updateRanges(
 			Range(m_xRange.val1-xIncrement, m_xRange.val2+xIncrement),
@@ -756,32 +774,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 		if( dialog.create( this, FILE_OPEN_TITLE, APFEL_FILES ) )
 		{
 			const char			*fileName = dialog.getFilename();
-			gak::xml::Parser	theGuiParser( fileName );
-			std::unique_ptr<gak::xml::Document>	newDoc( theGuiParser.readFile( false ) );
-			if(newDoc)
-			{
-				gak::xml::Element *root = newDoc->getRoot();
-				if( root )
-				{
-					gak::xml::Element *area = root->findElement("area");
-					if( area )
-					{
-						double xMin = area->getAttribute("xMin").getValueE<double>();
-						double xMax = area->getAttribute("xMax").getValueE<double>();
-						double yMin = area->getAttribute("yMin").getValueE<double>();
-						double yMax = area->getAttribute("yMax").getValueE<double>();
-
-						m_maxIterations = area->getAttribute("maxInterations").getValueE<int>();
-						m_paletteIndex = area->getAttribute("paletteIndex" ).getValueE<int>();
-						m_colorMode = ColorMode(area->getAttribute("colorMode" ).getValueE<int>());
-
-						m_doGray = area->getAttribute("doGray").getValueE<bool>();
-						m_centerColor = area->getAttribute("centerColor").getValueE<int>();
-
-						updateRanges(Range(xMin,xMax), Range(yMin,yMax));
-					}
-				}
-			}
+			loadFile( fileName );
 		}
 		break;
 	}
@@ -804,7 +797,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 			area->setIntegerAttribute("paletteIndex", m_paletteIndex);
 			area->setIntegerAttribute("colorMode", m_colorMode);
 			area->setBoolAttribute("doGray", m_doGray);
-			area->setBoolAttribute("centerColor", m_centerColor);
+			area->setIntegerAttribute("centerColor", m_centerColor);
 
 			STRING	xmlCode = doc->generate( gak::xml::XML_MODE );
 			std::ofstream	stream( fileName );
@@ -831,6 +824,36 @@ void MandelbrotWindow::handleTimer()
 // --------------------------------------------------------------------- //
 // ----- class publics ------------------------------------------------- //
 // --------------------------------------------------------------------- //
+
+void MandelbrotWindow::loadFile( STRING fileName )
+{
+	gak::xml::Parser theGuiParser( fileName.stripChar('\"') );
+	std::unique_ptr<gak::xml::Document> newDoc( theGuiParser.readFile( false ) );
+	if(newDoc)
+	{
+		gak::xml::Element *root = newDoc->getRoot();
+		if( root )
+		{
+			gak::xml::Element *area = root->findElement("area");
+			if( area )
+			{
+				double xMin = area->getAttribute("xMin").getValueE<double>();
+				double xMax = area->getAttribute("xMax").getValueE<double>();
+				double yMin = area->getAttribute("yMin").getValueE<double>();
+				double yMax = area->getAttribute("yMax").getValueE<double>();
+
+				m_maxIterations = area->getAttribute("maxInterations").getValueE<int>();
+				m_paletteIndex = area->getAttribute("paletteIndex" ).getValueE<int>();
+				m_colorMode = ColorMode(area->getAttribute("colorMode" ).getValueE<int>());
+
+				m_doGray = area->getAttribute("doGray").getValueE<bool>();
+				m_centerColor = area->getAttribute("centerColor").getValueE<int>();
+
+				updateRanges(Range(xMin,xMax), Range(yMin,yMax));
+			}
+		}
+	}
+}
 
 // --------------------------------------------------------------------- //
 // ----- entry points -------------------------------------------------- //
