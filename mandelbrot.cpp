@@ -195,7 +195,7 @@ class MandelbrotWindow : public OverlappedWindow
 	void updateRanges( const Range &xRange, const Range &yRange );
 	void updateScales();
 	double getGrayBase( int iteratios ) const;
-	BGRA findColor( int index, uint8 gray );
+	BGRA findColor( int index, gak::uint8 gray );
 	void recalcLine( int line, ProcessorData *pd );
 	void recalcBitmap( bool force, MandelBrotFunc mandelBrotFunc );
 
