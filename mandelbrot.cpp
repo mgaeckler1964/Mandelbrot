@@ -133,6 +133,21 @@ static const BGRA CENTER_COLORS[] =
 	makeBGRA(colors::TEAL),
 };
 
+// XML Tag and attributenames
+static const char APFEL_EXTENSION[]=".Apfel";
+
+static const char ROOT_TAG[]="mandelbrot";
+static const char AREA_TAG[]="area";
+static const char MIN_X_ATTR_NANE[]="xMin";
+static const char MAX_X_ATTR_NANE[]="xMax";
+static const char MIN_Y_ATTR_NANE[]="yMin";
+static const char MAX_Y_ATTR_NANE[]="yMax";
+static const char MAX_ITER_NAME[]="maxInterations";
+static const char PALETTE_NAME[]="paletteIndex";
+static const char COLOR_MODE_NAME[]="colorMode";
+static const char DO_GRAY_NAME[]="doGray";
+static const char CENTER_COLOR_NAME[]="centerColor";
+
 // --------------------------------------------------------------------- //
 // ----- macros -------------------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -228,7 +243,7 @@ class WindowsApplication : public Application
 		setApplication("Mandelbrot");
 		setCompany("gak");
 		winlib::FileTypeRegistry	ftReg;
-		ftReg.extension = ".apfel";
+		ftReg.extension = APFEL_EXTENSION;
 		ftReg.type = "apfel_file";
 		ftReg.type_description = "Apfelmännchen-/Mandelbrotdefinition";
 		ftReg.cmd = "open";
@@ -307,7 +322,7 @@ static WindowsApplication	app;
 // ----- module functions ---------------------------------------------- //
 // --------------------------------------------------------------------- //
 
-static int calculateMandelbrotPixel2(double xc, double yc, int max_iterations)
+static inline int calculateMandelbrotPixel2(double xc, double yc, int max_iterations)
 {
 	double x = 0.0;
 	double y = 0.0;
@@ -315,7 +330,7 @@ static int calculateMandelbrotPixel2(double xc, double yc, int max_iterations)
 	double y2 = 0.0;
     
 	int iter = 0;
-	while (x2 + y2 <= 4.0 && iter < max_iterations)
+	while( iter < max_iterations && x2 + y2 <= 4.0 )
 	{
 		y = 2.0 * x * y + yc;
 		x = x2 - y2 + xc;
@@ -430,7 +445,7 @@ void MandelbrotWindow::recalcLine( int y, ProcessorData *pd )
 			const double grayBase = getGrayBase( iter );
 			if (iter == m_maxIterations) 
 			{
-				m_mandelBrot.setPixel( x, y, m_doGray ? BGRA(0, 0, 0) : CENTER_COLORS[m_centerColor] );
+				m_mandelBrot.setPixel( x, y, CENTER_COLORS[m_centerColor] );
 			}
 			else 
 			{
@@ -783,21 +798,23 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 		SaveFileAsDialog	dialog;
 		if( dialog.create( this, FILE_SAVE_TITLE, APFEL_FILES ) )
 		{
-			const char *fileName = dialog.getFilename();
+			STRING fileName = dialog.getFilename();
+			if( fileName.searchChar( '.' ) == fileName.no_index )
+				fileName += APFEL_EXTENSION;
 			std::unique_ptr<gak::xml::Document>	doc( new gak::xml::Document(fileName) );
 			doc->addObject( new gak::xml::Declaration );
-			gak::xml::Element *root = doc->addObject( new gak::xml::Any( "mandelbrot" ) );
-			gak::xml::Element *area = root->addObject( new gak::xml::Any( "area" ) );
+			gak::xml::Element *root = doc->addObject( new gak::xml::Any( ROOT_TAG ) );
+			gak::xml::Element *area = root->addObject( new gak::xml::Any( AREA_TAG ) );
 
-			area->setFloatAttribute("xMin", m_xRange.val1, -1);
-			area->setFloatAttribute("xMax", m_xRange.val2, -1);
-			area->setFloatAttribute("yMin", m_yRange.val1, -1);
-			area->setFloatAttribute("yMax", m_yRange.val2, -1);
-			area->setIntegerAttribute("maxInterations", m_maxIterations);
-			area->setIntegerAttribute("paletteIndex", m_paletteIndex);
-			area->setIntegerAttribute("colorMode", m_colorMode);
-			area->setBoolAttribute("doGray", m_doGray);
-			area->setIntegerAttribute("centerColor", m_centerColor);
+			area->setFloatAttribute(MIN_X_ATTR_NANE, m_xRange.val1, -1);
+			area->setFloatAttribute(MAX_X_ATTR_NANE, m_xRange.val2, -1);
+			area->setFloatAttribute(MIN_Y_ATTR_NANE, m_yRange.val1, -1);
+			area->setFloatAttribute(MAX_Y_ATTR_NANE, m_yRange.val2, -1);
+			area->setIntegerAttribute(MAX_ITER_NAME, m_maxIterations);
+			area->setIntegerAttribute(PALETTE_NAME, m_paletteIndex);
+			area->setIntegerAttribute(COLOR_MODE_NAME, m_colorMode);
+			area->setBoolAttribute(DO_GRAY_NAME, m_doGray);
+			area->setIntegerAttribute(CENTER_COLOR_NAME, m_centerColor);
 
 			STRING	xmlCode = doc->generate( gak::xml::XML_MODE );
 			std::ofstream	stream( fileName );
@@ -834,20 +851,20 @@ void MandelbrotWindow::loadFile( STRING fileName )
 		gak::xml::Element *root = newDoc->getRoot();
 		if( root )
 		{
-			gak::xml::Element *area = root->findElement("area");
+			gak::xml::Element *area = root->findElement(AREA_TAG);
 			if( area )
 			{
-				double xMin = area->getAttribute("xMin").getValueE<double>();
-				double xMax = area->getAttribute("xMax").getValueE<double>();
-				double yMin = area->getAttribute("yMin").getValueE<double>();
-				double yMax = area->getAttribute("yMax").getValueE<double>();
+				double xMin = area->getAttribute(MIN_X_ATTR_NANE).getValueE<double>();
+				double xMax = area->getAttribute(MAX_X_ATTR_NANE).getValueE<double>();
+				double yMin = area->getAttribute(MIN_Y_ATTR_NANE).getValueE<double>();
+				double yMax = area->getAttribute(MAX_Y_ATTR_NANE).getValueE<double>();
 
-				m_maxIterations = area->getAttribute("maxInterations").getValueE<int>();
-				m_paletteIndex = area->getAttribute("paletteIndex" ).getValueE<int>();
-				m_colorMode = ColorMode(area->getAttribute("colorMode" ).getValueE<int>());
+				m_maxIterations = area->getAttribute(MAX_ITER_NAME).getValueE<int>();
+				m_paletteIndex = area->getAttribute(PALETTE_NAME).getValueE<int>();
+				m_colorMode = ColorMode(area->getAttribute(COLOR_MODE_NAME).getValueE<int>());
 
-				m_doGray = area->getAttribute("doGray").getValueE<bool>();
-				m_centerColor = area->getAttribute("centerColor").getValueE<int>();
+				m_doGray = area->getAttribute(DO_GRAY_NAME).getValueE<bool>();
+				m_centerColor = area->getAttribute(CENTER_COLOR_NAME).getValueE<int>();
 
 				updateRanges(Range(xMin,xMax), Range(yMin,yMax));
 			}
