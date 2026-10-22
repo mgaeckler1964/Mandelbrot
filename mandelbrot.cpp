@@ -79,7 +79,7 @@ typedef Scale::Pair					Range;
 static const Range	X_RANGE(-2, 0.5),
 					Y_RANGE(-1.25, 1.25);
 
-static const int START_PALETTE = 0;
+static const size_t START_PALETTE = 0;
 static const int MIN_ITERATIONS = 3;	// assertion failed if min is less than 3
 static const int START_ITERATIONS = 128;
 static const int ITERATION_STEP = 32;
@@ -138,10 +138,10 @@ static const char APFEL_EXTENSION[]=".Apfel";
 
 static const char ROOT_TAG[]="mandelbrot";
 static const char AREA_TAG[]="area";
-static const char MIN_X_ATTR_NANE[]="xMin";
-static const char MAX_X_ATTR_NANE[]="xMax";
-static const char MIN_Y_ATTR_NANE[]="yMin";
-static const char MAX_Y_ATTR_NANE[]="yMax";
+static const char MIN_X_ATTR_NAME[]="xMin";
+static const char MAX_X_ATTR_NAME[]="xMax";
+static const char MIN_Y_ATTR_NAME[]="yMin";
+static const char MAX_Y_ATTR_NAME[]="yMax";
 static const char MAX_ITER_NAME[]="maxInterations";
 static const char PALETTE_NAME[]="paletteIndex";
 static const char COLOR_MODE_NAME[]="colorMode";
@@ -202,12 +202,12 @@ class MandelbrotWindow : public OverlappedWindow
 	int				m_maxIterations;
 	bool			m_showLabels;
 	bool			m_doGray;
-	int				m_centerColor;
+	size_t			m_centerColor;
 	enum ColorMode 
 	{
 		cmLinear, cmRoot, cmLog, cmUnused
 	}				m_colorMode;
-	int				m_paletteIndex;
+	size_t			m_paletteIndex;
 	void updateRanges( const Range &xRange, const Range &yRange );
 	void updateScales();
 	double getGrayBase( int iteratios ) const;
@@ -242,14 +242,17 @@ class WindowsApplication : public Application
 		doDisableLog();
 		setApplication("Mandelbrot");
 		setCompany("gak");
-		winlib::FileTypeRegistry	ftReg;
-		ftReg.extension = APFEL_EXTENSION;
-		ftReg.type = "apfel_file";
-		ftReg.type_description = "Apfelmännchen-/Mandelbrotdefinition";
-		ftReg.cmd = "open";
-		ftReg.cmd_description =	"&open";
-		ftReg.commandLine =	STRING(getFileName()).add(" \"%1\"");
 
+		FileTypeRegistry	ftReg =
+		{
+			APFEL_EXTENSION,						// .extension
+			"apfel_file",							// .type
+			"Apfelmännchen-/Mandelbrotdefinition",	// .type_description
+			nullptr,								// .icon
+			"open",									// .cmd
+			"&open",								// .cmd_description
+			STRING(getFileName()).add(" \"%1\"")	// commandLine
+		};
 		addFileType(&ftReg);
 		return 0;
 	}
@@ -270,7 +273,7 @@ class WindowsApplication : public Application
 		{
 			throw gak::LibraryException( "Could not create window!" );
 		}
-		if( cmdLine && *cmdLine )
+		if( !gak::isEmpty(cmdLine) )
 			mainWindow->loadFile( cmdLine );
 		mainWindow->focus();
 		return mainWindow.release();
@@ -788,7 +791,7 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 		OpenFileDialog	dialog;
 		if( dialog.create( this, FILE_OPEN_TITLE, APFEL_FILES ) )
 		{
-			const char			*fileName = dialog.getFilename();
+			const char	*fileName = dialog.getFilename();
 			loadFile( fileName );
 		}
 		break;
@@ -806,10 +809,10 @@ ProcessStatus MandelbrotWindow::handleCommand( int cmd )
 			gak::xml::Element *root = doc->addObject( new gak::xml::Any( ROOT_TAG ) );
 			gak::xml::Element *area = root->addObject( new gak::xml::Any( AREA_TAG ) );
 
-			area->setFloatAttribute(MIN_X_ATTR_NANE, m_xRange.val1, -1);
-			area->setFloatAttribute(MAX_X_ATTR_NANE, m_xRange.val2, -1);
-			area->setFloatAttribute(MIN_Y_ATTR_NANE, m_yRange.val1, -1);
-			area->setFloatAttribute(MAX_Y_ATTR_NANE, m_yRange.val2, -1);
+			area->setFloatAttribute(MIN_X_ATTR_NAME, m_xRange.val1, -1);
+			area->setFloatAttribute(MAX_X_ATTR_NAME, m_xRange.val2, -1);
+			area->setFloatAttribute(MIN_Y_ATTR_NAME, m_yRange.val1, -1);
+			area->setFloatAttribute(MAX_Y_ATTR_NAME, m_yRange.val2, -1);
 			area->setIntegerAttribute(MAX_ITER_NAME, m_maxIterations);
 			area->setIntegerAttribute(PALETTE_NAME, m_paletteIndex);
 			area->setIntegerAttribute(COLOR_MODE_NAME, m_colorMode);
@@ -854,17 +857,17 @@ void MandelbrotWindow::loadFile( STRING fileName )
 			gak::xml::Element *area = root->findElement(AREA_TAG);
 			if( area )
 			{
-				double xMin = area->getAttribute(MIN_X_ATTR_NANE).getValueE<double>();
-				double xMax = area->getAttribute(MAX_X_ATTR_NANE).getValueE<double>();
-				double yMin = area->getAttribute(MIN_Y_ATTR_NANE).getValueE<double>();
-				double yMax = area->getAttribute(MAX_Y_ATTR_NANE).getValueE<double>();
+				double xMin = area->getAttribute(MIN_X_ATTR_NAME).getValueE<double>();
+				double xMax = area->getAttribute(MAX_X_ATTR_NAME).getValueE<double>();
+				double yMin = area->getAttribute(MIN_Y_ATTR_NAME).getValueE<double>();
+				double yMax = area->getAttribute(MAX_Y_ATTR_NAME).getValueE<double>();
 
 				m_maxIterations = area->getAttribute(MAX_ITER_NAME).getValueE<int>();
-				m_paletteIndex = area->getAttribute(PALETTE_NAME).getValueE<int>();
+				m_paletteIndex = area->getAttribute(PALETTE_NAME).getValueE<size_t>();
 				m_colorMode = ColorMode(area->getAttribute(COLOR_MODE_NAME).getValueE<int>());
 
 				m_doGray = area->getAttribute(DO_GRAY_NAME).getValueE<bool>();
-				m_centerColor = area->getAttribute(CENTER_COLOR_NAME).getValueE<int>();
+				m_centerColor = area->getAttribute(CENTER_COLOR_NAME).getValueE<size_t>();
 
 				updateRanges(Range(xMin,xMax), Range(yMin,yMax));
 			}
