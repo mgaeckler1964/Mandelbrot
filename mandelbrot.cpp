@@ -565,7 +565,7 @@ ProcessStatus MandelbrotWindow::handleMouseMove( ModifierFlags modifier, const P
 	if( modifier.test( ModifierFlags::mbLeftMouseButton ) )
 	{
 		DrawDevice	dc( this );
-		dc.setROP2( R2_NOT );
+		dc.setDrawMode( dmNOT );
 		if( m_lastSelect.x >= 0 )
 		{
 			dc.drawRectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
@@ -594,7 +594,7 @@ ProcessStatus MandelbrotWindow::handleLeftButton( LeftButton leftButton, Modifie
 		if( m_lastSelect.x >= 0 )
 		{
 			DrawDevice	dc( this );
-			dc.setROP2( R2_NOT );
+			dc.setDrawMode( dmNOT );
 			dc.drawRectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
 		}
 		int minX = gak::math::min( m_startSelect.x, m_lastSelect.x );
