@@ -129,7 +129,7 @@ static const BGRA CENTER_COLORS[] =
 	makeBGRA(colors::GREEN),
 	makeBGRA(colors::NAVY),
 	makeBGRA(colors::OLIVE),
-	makeBGRA(colors::PURPE),
+	makeBGRA(colors::PURPLE),
 	makeBGRA(colors::TEAL),
 };
 
