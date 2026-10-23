@@ -256,7 +256,7 @@ class WindowsApplication : public Application
 		addFileType(&ftReg);
 		return 0;
 	}
-	CallbackWindow *createMainWindow( const char *cmdLine, int /*nCmdShow*/ ) override
+	CallbackWindow *createMainWindow( const char *cmdLine, ShowWindowMode /*nCmdShow*/ ) override
 	{
 		std::unique_ptr<MandelbrotWindow>	mainWindow( new MandelbrotWindow );
 
@@ -568,10 +568,10 @@ ProcessStatus MandelbrotWindow::handleMouseMove( ModifierFlags modifier, const P
 		dc.setROP2( R2_NOT );
 		if( m_lastSelect.x >= 0 )
 		{
-			dc.rectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
+			dc.drawRectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
 		}
 		m_lastSelect = position;
-		dc.rectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
+		dc.drawRectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
 	}
 	return psPROCESSED;	
 }
@@ -595,7 +595,7 @@ ProcessStatus MandelbrotWindow::handleLeftButton( LeftButton leftButton, Modifie
 		{
 			DrawDevice	dc( this );
 			dc.setROP2( R2_NOT );
-			dc.rectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
+			dc.drawRectangle(m_startSelect.x, m_startSelect.y, m_lastSelect.x, m_lastSelect.y );
 		}
 		int minX = gak::math::min( m_startSelect.x, m_lastSelect.x );
 		int maxX = gak::math::max( m_startSelect.x, m_lastSelect.x );
