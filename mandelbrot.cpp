@@ -536,18 +536,19 @@ void MandelbrotWindow::recalcBitmap(bool force, MandelBrotFunc mandelBrotFunc )
 				gak::NumberBuffer().addNumber( m_centerColor ).c_str() 
 			); 
 
+			const int precsion = 12;
 			memDC.getFont().setCourier().setDirection( 900 ).create();
 			memDC.setTextAlignment( Device::haCenter, Device::vaTop );
-			memDC.textOut( 0, data.winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val1,0,6 ).c_str() );
+			memDC.textOut( 0, data.winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val1,0,precsion ).c_str() );
 
 			memDC.getFont().setDirection( 2700 );
-			memDC.textOut( data.winSize.width, data.winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val2,0,6 ).c_str() );
+			memDC.textOut( data.winSize.width, data.winSize.height/2, gak::NumberBuffer().addFloat( m_xRange.val2,0,precsion ).c_str() );
 
 			memDC.getFont().setDirection( 0 );
-			memDC.textOut( data.winSize.width/2, 0, gak::NumberBuffer().addFloat( m_yRange.val2,0,6 ).c_str() );
+			memDC.textOut( data.winSize.width/2, 0, gak::NumberBuffer().addFloat( m_yRange.val2,0,precsion ).c_str() );
 
 			memDC.setTextAlignment( Device::haCenter, Device::vaBottom );
-			memDC.textOut( data.winSize.width/2, data.winSize.height, gak::NumberBuffer().addFloat( m_yRange.val1,0,6 ).c_str() );
+			memDC.textOut( data.winSize.width/2, data.winSize.height, gak::NumberBuffer().addFloat( m_yRange.val1,0,precsion ).c_str() );
 		}
 	}
 }
