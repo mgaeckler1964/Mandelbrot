@@ -47,4 +47,6 @@ R  | Wie 'r' nur werden zusätzlich auch alle anderen Bildparameterzurückgesetz
      jedes Bild wieder herstellen.
 </pre>
 
+Fertige Binaries gibt's hier: https://www.gaeckler.at/Software/software.htm#Mandelbrot
+
 <img width="800" height="580" alt="screen" src="https://github.com/user-attachments/assets/d81594d6-3936-4fe1-840a-9ece8fb2c729" />
